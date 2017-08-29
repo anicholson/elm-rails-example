@@ -4,4 +4,9 @@ $mineshaft: #323232;
 $primary: $watermelon;
 $dark: $mineshaft;
 
-@import "~bulma/bulma.sass"
+@import "~bulma/bulma.sass";
+
+.card-footer-item.is-primary {
+    background-color: $primary;
+    color: $primary-invert;
+}
