@@ -1,9 +1,10 @@
 port module Main exposing (..)
 
-import Html exposing (Html, h1, h2, p, text, div, section, figure, img)
+import Html exposing (Html, a, h1, h2, p, text, div, section, figure, img)
 import Html.Attributes exposing (class, alt, src)
+import Html.Attributes.Aria exposing (role)
+import Html.Events exposing (onClick)
 import Dict exposing (Dict)
-import Json.Decode exposing (Value)
 
 
 -- MODEL
@@ -25,12 +26,8 @@ type alias Catalog =
     Dict String Product
 
 
-type alias LineItem =
-    { product : Product, qty : Int }
-
-
 type alias OrderSummary =
-    { items : List LineItem, total : Cents }
+    { items : List Bundle, total : Cents }
 
 
 type Order
@@ -51,6 +48,36 @@ type alias Model =
     }
 
 
+totalForOrder : List Bundle -> Cents
+totalForOrder items =
+    let
+        prices =
+            List.map (\item -> item.price) items
+    in
+        List.sum prices
+
+
+updateOrder : Order -> Bundle -> Product -> Order
+updateOrder order bundle product =
+    let
+        newBundles =
+            \oldBundles -> bundle :: oldBundles
+    in
+        case order of
+            Unfillable ->
+                Unfillable
+
+            Empty ->
+                Fillable { items = [ bundle ], total = bundle.price }
+
+            Fillable o ->
+                let
+                    newOrder =
+                        { items = newBundles o.items, total = o.total + bundle.price }
+                in
+                    Fillable newOrder
+
+
 
 -- INIT
 
@@ -66,21 +93,27 @@ init =
 
 productView : Product -> Html Message
 productView product =
-    div [ class "column" ]
-        [ div [ class "card" ]
-            [ div [ class "card-image" ]
-                [ figure [ class "image is-4by3" ]
-                    [ img [ src "http://bulma.io/images/placeholders/1280x960.png", alt product.name ] [] ]
-                ]
-            , div [ class "card-content" ]
-                [ h1 [ class "title" ] [ text product.name ]
-                , p [] [ text product.description ]
-                ]
-            , div [ class "card-footer" ]
-                []
-            ]
-        ]
+    let
+        purchaseButton =
+            \bundle ->
+                a [ class "card-footer-item is-primary", role "button", onClick (OrderedBundle ( bundle, product )) ] [ text (toString bundle.amount) ]
 
+        purchaseButtons =
+            List.map purchaseButton product.prices
+    in
+        div [ class "column" ]
+            [ div [ class "card" ]
+                [ div [ class "card-image" ]
+                    [ figure [ class "image is-4by3" ]
+                        [ img [ src "http://bulma.io/images/placeholders/1280x960.png", alt product.name ] [] ]
+                    ]
+                , div [ class "card-content" ]
+                    [ h1 [ class "title" ] [ text product.name ]
+                    , p [] [ text product.description ]
+                    ]
+                , div [ class "card-footer" ] purchaseButtons
+                ]
+            ]
 
 
 catalogView : Maybe Catalog -> Html Message
@@ -131,6 +164,7 @@ type Message
     | ReceivedRawCatalog (List Product)
     | ReceivedCatalog Catalog
     | Start
+    | OrderedBundle ( Bundle, Product )
 
 
 port catalog : (List Product -> msg) -> Sub msg
@@ -171,6 +205,16 @@ update message model =
 
         Start ->
             ( { model | appState = Ready }, Cmd.none )
+
+        OrderedBundle ( bundle, product ) ->
+            let
+                b =
+                    Debug.log "Ordered bundle:" bundle
+
+                newOrder =
+                    Debug.log "Finished order:" <| updateOrder model.currentOrder bundle product
+            in
+                ( { model | currentOrder = newOrder }, Cmd.none )
 
         otherwise ->
             ( model, Cmd.none )
