@@ -1,6 +1,6 @@
 port module Main exposing (..)
 
-import Html exposing (Html, a, h1, h2, p, text, div, section, figure, img)
+import Html exposing (Html, a, h1, h2, button, p, text, div, section, figure, img)
 import Html.Attributes exposing (class, alt, src)
 import Html.Attributes.Aria exposing (role)
 import Html.Events exposing (onClick)
@@ -19,7 +19,7 @@ type alias Bundle =
 
 
 type alias Product =
-    { name : String, code : String, description : String, prices : List Bundle }
+    { name : String, code : String, description : String, prices : List Bundle, imageUrl: Maybe String }
 
 
 type alias Catalog =
@@ -91,6 +91,60 @@ init =
 -- VIEW
 
 
+header : Html Never
+header =
+    section [ class "hero is-dark" ]
+        [ div [ class "hero-body" ]
+            [ section [ class "container" ]
+                [ h1 [ class "title" ] [ text "My wonderful flower shop" ]
+                ]
+            ]
+        ]
+
+
+itemCount : Order -> Int
+itemCount order =
+    case order of
+        Fillable summary ->
+            List.length summary.items
+
+        otherwise ->
+            0
+
+
+headline : Model -> Html Message
+headline model =
+    let
+        displayCart =
+            case model.currentOrder of
+                Fillable _ ->
+                    True
+
+                otherwise ->
+                    False
+
+        leftSection =
+            div [ class "level-left" ]
+                [ div [ class "level-item" ] [ h2 [ class "subtitle" ] [ text "Our current seasonal offerings" ] ] ]
+
+        rightSection =
+            div [ class "level-right" ]
+                [ div [ class "level-item" ]
+                    [ button [ class "button is-primary" ]
+                        [ text <| "Cart (" ++ (toString <| itemCount model.currentOrder) ++ ")"
+                        ]
+                    ]
+                ]
+
+        subview =
+            if displayCart then
+                [ leftSection, rightSection ]
+            else
+                [ leftSection ]
+    in
+        div [ class "level" ] subview
+
+
 productView : Product -> Html Message
 productView product =
     let
@@ -100,12 +154,14 @@ productView product =
 
         purchaseButtons =
             List.map purchaseButton product.prices
+
+        productPicture = Maybe.withDefault "http://bulma.io/images/placeholders/1280x960.png" product.imageUrl
     in
         div [ class "column" ]
             [ div [ class "card" ]
                 [ div [ class "card-image" ]
                     [ figure [ class "image is-4by3" ]
-                        [ img [ src "http://bulma.io/images/placeholders/1280x960.png", alt product.name ] [] ]
+                        [ img [ src productPicture, alt product.name ] [] ]
                     ]
                 , div [ class "card-content" ]
                     [ h1 [ class "title" ] [ text product.name ]
@@ -142,16 +198,15 @@ view model =
         subview =
             case model.appState of
                 Waiting ->
-                    div [ class "notification is-primary" ] [ text "Loading catalog..." ]
+                    [ div [ class "notification is-primary" ] [ text "Loading catalog..." ] ]
 
                 otherwise ->
-                    catalogView model.catalog
+                    [ headline model
+                    , catalogView model.catalog
+                    ]
     in
         section [ class "section" ]
-            [ div [ class "container" ]
-                [ h2 [ class "subtitle" ] [ text "Our current seasonal offerings" ]
-                , subview
-                ]
+            [ div [ class "container" ] subview
             ]
 
 
