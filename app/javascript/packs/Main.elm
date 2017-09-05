@@ -1,10 +1,11 @@
 port module Main exposing (..)
 
-import Html exposing (Html, a, h1, h2, button, p, text, div, section, figure, img)
+import Html exposing (Html, a, h1, h2, button, p, text, header, footer, table, thead, tbody, tfoot, td, tr, th, div, section, figure, img)
 import Html.Attributes exposing (class, alt, src)
 import Html.Attributes.Aria exposing (role, ariaLabel)
 import Html.Events exposing (onClick)
 import Dict exposing (Dict)
+import Round
 
 
 -- MODEL
@@ -12,6 +13,15 @@ import Dict exposing (Dict)
 
 type alias Cents =
     Int
+
+
+price : Cents -> String
+price cents =
+    let
+        centsAsFloat =
+            Round.round 2 <| toFloat cents / 100.0
+    in
+        "$" ++ centsAsFloat
 
 
 type alias Bundle =
@@ -27,7 +37,7 @@ type alias Catalog =
 
 
 type alias OrderSummary =
-    { items : List Bundle, total : Cents }
+    { items : List ( Product, Bundle ), total : Cents }
 
 
 type Order
@@ -70,14 +80,14 @@ updateOrder : Order -> Bundle -> Product -> Order
 updateOrder order bundle product =
     let
         newBundles =
-            \oldBundles -> bundle :: oldBundles
+            \oldBundles -> ( product, bundle ) :: oldBundles
     in
         case order of
             Unfillable ->
                 Unfillable
 
             Empty ->
-                Fillable { items = [ bundle ], total = bundle.price }
+                Fillable { items = [ ( product, bundle ) ], total = bundle.price }
 
             Fillable o ->
                 let
@@ -98,17 +108,6 @@ init =
 
 
 -- VIEW
-
-
-header : Html Never
-header =
-    section [ class "hero is-dark" ]
-        [ div [ class "hero-body" ]
-            [ section [ class "container" ]
-                [ h1 [ class "title" ] [ text "My wonderful flower shop" ]
-                ]
-            ]
-        ]
 
 
 itemCount : Order -> Int
@@ -183,14 +182,60 @@ productView product =
 
 
 cartView : Order -> Html Message
-cartView items =
-    div [ class "modal is-active" ]
-        [ div [ class "modal-background", onClick ClosedCart ] []
-        , div [ class "modal-content" ]
-            [ h1 [ class "title" ] [ text "Your Cart" ]
+cartView order =
+    let
+        itemView =
+            \( product, bundle ) ->
+                tr []
+                    [ td [] [ text product.name ]
+                    , td [] [ text <| toString bundle.amount ]
+                    , td [ class "has-text-right" ] [ text <| price bundle.price ]
+                    ]
+
+        itemsView =
+            case order of
+                Fillable o ->
+                    section [ class "modal-card-body" ]
+                        [ table [ class "table is-striped is-fullwidth" ]
+                            [ thead []
+                                [ tr []
+                                    [ th [] [ text "Item" ]
+                                    , th [] [ text "Qty" ]
+                                    , th [ class "has-text-right" ] [ text "Price" ]
+                                    ]
+                                ]
+                            , tbody [] <| List.map itemView o.items
+                            , tfoot []
+                                [ tr []
+                                    [ td [] []
+                                    , td [] []
+                                    , th [ class "has-text-right" ] [ text <| price o.total ]
+                                    ]
+                                ]
+                            ]
+                        ]
+
+                otherwise ->
+                    section [ class "modal-card-body" ] [ h1 [ class "subtitle" ] [ text "Your card is currently empty." ] ]
+
+        footerView =
+            footer [ class "modal-card-foot" ]
+                [ button [ class "button is-success" ] [ text "Buy now!" ]
+                , button [ class "button" ] [ text "Clear items" ]
+                ]
+    in
+        div [ class "modal is-active" ]
+            [ div [ class "modal-background", onClick ClosedCart ] []
+            , div [ class "modal-card" ]
+                [ header [ class "modal-card-head" ]
+                    [ p [ class "modal-card-title" ] [ text "Your Cart" ]
+                    , button [ class "delete", ariaLabel "close", onClick ClosedCart ] []
+                    ]
+                , itemsView
+                , footerView
+                ]
+            , button [ class "modal-close is-large", ariaLabel "close", onClick ClosedCart ] []
             ]
-        , button [ class "modal-close is-large", ariaLabel "close", onClick ClosedCart ] []
-        ]
 
 
 catalogView : Maybe Catalog -> Html Message
@@ -233,7 +278,8 @@ view model =
                     in
                         [ headline model
                         , catalogView model.catalog
-                        ] ++ cart
+                        ]
+                            ++ cart
     in
         section [ class "section" ]
             [ div [ class "container" ] subview
