@@ -2,7 +2,7 @@ port module Main exposing (..)
 
 import Html exposing (Html, a, h1, h2, button, p, text, div, section, figure, img)
 import Html.Attributes exposing (class, alt, src)
-import Html.Attributes.Aria exposing (role)
+import Html.Attributes.Aria exposing (role, ariaLabel)
 import Html.Events exposing (onClick)
 import Dict exposing (Dict)
 
@@ -19,7 +19,7 @@ type alias Bundle =
 
 
 type alias Product =
-    { name : String, code : String, description : String, prices : List Bundle, imageUrl: Maybe String }
+    { name : String, code : String, description : String, prices : List Bundle, imageUrl : Maybe String }
 
 
 type alias Catalog =
@@ -36,9 +36,18 @@ type Order
     | Empty
 
 
+type alias ReadyState =
+    { viewingCart : Bool }
+
+
+defaultReadyState : ReadyState
+defaultReadyState =
+    { viewingCart = False }
+
+
 type AppState
     = Waiting
-    | Ready
+    | Ready ReadyState
 
 
 type alias Model =
@@ -130,7 +139,7 @@ headline model =
         rightSection =
             div [ class "level-right" ]
                 [ div [ class "level-item" ]
-                    [ button [ class "button is-primary" ]
+                    [ button [ class "button is-primary", onClick OpenedCart ]
                         [ text <| "Cart (" ++ (toString <| itemCount model.currentOrder) ++ ")"
                         ]
                     ]
@@ -155,7 +164,8 @@ productView product =
         purchaseButtons =
             List.map purchaseButton product.prices
 
-        productPicture = Maybe.withDefault "http://bulma.io/images/placeholders/1280x960.png" product.imageUrl
+        productPicture =
+            Maybe.withDefault "http://bulma.io/images/placeholders/1280x960.png" product.imageUrl
     in
         div [ class "column" ]
             [ div [ class "card" ]
@@ -170,6 +180,17 @@ productView product =
                 , div [ class "card-footer" ] purchaseButtons
                 ]
             ]
+
+
+cartView : Order -> Html Message
+cartView items =
+    div [ class "modal is-active" ]
+        [ div [ class "modal-background", onClick ClosedCart ] []
+        , div [ class "modal-content" ]
+            [ h1 [ class "title" ] [ text "Your Cart" ]
+            ]
+        , button [ class "modal-close is-large", ariaLabel "close", onClick ClosedCart ] []
+        ]
 
 
 catalogView : Maybe Catalog -> Html Message
@@ -200,10 +221,19 @@ view model =
                 Waiting ->
                     [ div [ class "notification is-primary" ] [ text "Loading catalog..." ] ]
 
-                otherwise ->
-                    [ headline model
-                    , catalogView model.catalog
-                    ]
+                Ready state ->
+                    let
+                        cart =
+                            case state.viewingCart of
+                                True ->
+                                    [ cartView model.currentOrder ]
+
+                                False ->
+                                    []
+                    in
+                        [ headline model
+                        , catalogView model.catalog
+                        ] ++ cart
     in
         section [ class "section" ]
             [ div [ class "container" ] subview
@@ -220,6 +250,8 @@ type Message
     | ReceivedCatalog Catalog
     | Start
     | OrderedBundle ( Bundle, Product )
+    | OpenedCart
+    | ClosedCart
 
 
 port catalog : (List Product -> msg) -> Sub msg
@@ -259,7 +291,7 @@ update message model =
                 update Start newModel
 
         Start ->
-            ( { model | appState = Ready }, Cmd.none )
+            ( { model | appState = Ready defaultReadyState }, Cmd.none )
 
         OrderedBundle ( bundle, product ) ->
             let
@@ -270,6 +302,38 @@ update message model =
                     Debug.log "Finished order:" <| updateOrder model.currentOrder bundle product
             in
                 ( { model | currentOrder = newOrder }, Cmd.none )
+
+        OpenedCart ->
+            case model.appState of
+                Waiting ->
+                    let
+                        warning =
+                            Debug.log "WARN: OpenedCart event that should not have been possible" ()
+                    in
+                        ( model, Cmd.none )
+
+                Ready state ->
+                    let
+                        newAppState =
+                            Ready { state | viewingCart = True }
+                    in
+                        ( { model | appState = newAppState }, Cmd.none )
+
+        ClosedCart ->
+            case model.appState of
+                Waiting ->
+                    let
+                        warning =
+                            Debug.log "WARN: ClosedCart event that should not have been possible" ()
+                    in
+                        ( model, Cmd.none )
+
+                Ready state ->
+                    let
+                        newAppState =
+                            Ready { state | viewingCart = False }
+                    in
+                        ( { model | appState = newAppState }, Cmd.none )
 
         otherwise ->
             ( model, Cmd.none )
